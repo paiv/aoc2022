@@ -2,4 +2,4 @@ Advent of Code 2022
 ==
 paiv
 
-[![standwithukraine](https://user-images.githubusercontent.com/196601/157244196-84e6795a-f880-49b6-8d7b-c2d6ed83e71d.svg)](https://ukrainewar.carrd.co/)
+[![standwithukraine](https://user-images.githubusercontent.com/196601/204972137-2b61b41a-cc33-4d67-b5fb-bc17ebd166f9.svg)](https://ukrainewar.carrd.co/)
