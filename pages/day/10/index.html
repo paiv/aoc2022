@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 10: Cathode-Ray Tube</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:6em; height:12em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-grow:1; user-select:none;}
+#gfx canvas {flex:1 0 auto; height:auto; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm > * {margin-left: 1em; margin-top: 2em;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2022/day/10">aoc:day/10</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input"
+>addx 15
+addx -11
+addx 6
+addx -3
+addx 5
+addx -1
+addx -8
+addx 13
+addx 4
+noop
+addx -1
+addx 5
+addx -1
+addx 5
+addx -1
+addx 5
+addx -1
+addx 5
+addx -1
+addx -35
+addx 1
+addx 24
+addx -19
+addx 1
+addx 16
+addx -11
+noop
+noop
+addx 21
+addx -15
+noop
+noop
+addx -3
+addx 9
+addx 1
+addx -3
+addx 8
+addx 1
+addx 5
+noop
+noop
+noop
+noop
+noop
+addx -36
+noop
+addx 1
+addx 7
+noop
+noop
+noop
+addx 2
+addx 6
+noop
+noop
+noop
+noop
+noop
+addx 1
+noop
+noop
+addx 7
+addx 1
+noop
+addx -13
+addx 13
+addx 7
+noop
+addx 1
+addx -33
+noop
+noop
+noop
+addx 2
+noop
+noop
+noop
+addx 8
+noop
+addx -1
+addx 2
+addx 1
+noop
+addx 17
+addx -9
+addx 1
+addx 1
+addx -3
+addx 11
+noop
+noop
+addx 1
+noop
+addx 1
+noop
+noop
+addx -13
+addx -19
+addx 1
+addx 3
+addx 26
+addx -30
+addx 12
+addx -1
+addx 3
+addx 1
+noop
+noop
+noop
+addx -9
+addx 18
+addx 1
+addx 2
+noop
+noop
+addx 9
+noop
+noop
+noop
+addx -1
+addx 2
+addx -37
+addx 1
+addx 3
+noop
+addx 15
+addx -21
+addx 22
+addx -6
+addx 1
+noop
+addx 2
+addx 1
+noop
+addx -10
+noop
+noop
+addx 20
+addx 1
+addx 2
+addx 2
+addx -6
+addx -11
+noop
+noop
+noop
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="b2">Play</button>
+    <code id="t1"></code>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let FPS = 10
+const cc = (y,x) => y * 10000 + x
+const yx = cc => [Math.floor(cc / 10000), cc % 10000]
+const neib = [cc(0,1), cc(-1,0), cc(0,-1), cc(1,0)]
+let _State = {}
+let _Renderer = undefined
+function render(state) {
+    state.te1.textContent = state.score1
+    const [w,h] = state.boardsize
+    const pois = state.pois
+    let img = new ImageData(w, h)
+    let px = img.data
+    for (let y = 0; y < h; ++y) {
+        for (let x = 0; x < w; ++x) {
+            let i = (y * w + x) * 4
+            let p = cc(y, x)
+            let n = state.grid.get(p)
+            let c = (n === undefined) ? 0 : Math.min(10, n) * 20
+            if (pois && pois.has(p)) {
+                c = c || 120
+                px[i+0] = px[i+2] = c
+                px[i+1] = Math.floor(c / 5)
+            }
+            else {
+                px[i+0] = px[i+1] = px[i+2] = c
+            }
+            px[i+3] = 255
+        }
+    }
+    state.ctx.putImageData(img, 0, 0)
+}
+function explore2(state) {
+    switch (state.stage) {
+        case 0: {
+            const [w,h] = state.boardsize
+            state.score1 = 0
+            state.pixels = new Set()
+            state.ct = 0
+            state.cy = 0
+            state.cx = 0
+            state.sx = 1
+            state.grid = new Map()
+            state.grid.set(cc(state.cy, state.cx), 10)
+            state.pois = new Set([0, 1, 2])
+            render(state)
+            state.ip = 0
+            state.stage += 1
+            break
+        }
+        case 1: {
+            const [w,h] = state.boardsize
+            const ig = state.inputGrid
+            const [op, n] = state.program[state.ip]
+            {
+                function cycle() {
+                    for (let i = 0; i < 3; ++i) {
+                        if (state.sx + i - 1 === state.cx) {
+                            state.pixels.add(cc(state.cy, state.cx)); break
+                        }
+                    }
+                    state.ct += 1
+                    state.cx = state.ct % 40
+                    state.cy += state.cx == 0
+                    if ((state.ct + 20) % 40 === 0) {
+                        state.score1 += state.ct * state.sx
+                    }
+                }
+                switch (op) {
+                    case 'noop':
+                        cycle()
+                        state.ip += 1
+                        break
+                    case 'addx':
+                        if (state.subt) {
+                            state.subt -= 1
+                            cycle()
+                            state.sx += n
+                            state.ip += 1
+                        }
+                        else {
+                            state.subt = 1
+                            cycle()
+                        }
+                        break
+                }
+            }
+            state.grid = new Map()
+            state.pixels.forEach(p => state.grid.set(p, 8))
+            state.grid.set(cc(state.cy, state.cx), 10)
+            state.pois = new Set([cc(state.cy, state.sx-1), cc(state.cy, state.sx), cc(state.cy, state.sx+1)])
+            render(state)
+            if (state.ip >= state.program.length) {
+                state.stage += 1
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts, explore) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        let w = 1000 / FPS
+        while (dt > w) {
+            dt -= w
+            lastFrameTimestamp = ts
+            explore(_State)
+            if (_State.done) { return }
+        }
+    }
+    if (_Renderer) {
+        _Renderer = requestAnimationFrame((ts) => ticker(ts, explore))
+    }
+}
+function resetGraphics(w, h) {
+    if (_Renderer) {
+        cancelAnimationFrame(_Renderer)
+        _Renderer = undefined
+    }
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+
+    if (w && h) {
+        let canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        let ctx = canvas.getContext('2d')
+        ctx.fillRect(0, 0, w, h)
+        board.appendChild(canvas)
+        return {canvas}
+    }
+}
+function parseInput() {
+    let input = document.getElementById('input').value
+    let program = input.trim().split('\n').map(s => s.trim().split(/\s+/).map((x,i) => i ? parseInt(x) : x))
+    return {program, w:40, h:6}
+}
+function solvePart2() {
+    document.querySelector('.fm #b2').blur()
+    resetGraphics()
+    let {program, w, h} = parseInput()
+    let {canvas} = resetGraphics(w, h)
+    let te1 = document.querySelector('#t1')
+    let ctx = canvas.getContext('2d')
+    _State = {
+        stage: 0,
+        ctx: ctx,
+        boardsize: [w, h],
+        program,
+        te1,
+    }
+    lastFrameTimestamp = 0
+    _Renderer = requestAnimationFrame((ts) => ticker(ts, explore2))
+}
+function setupApp() {
+    document.querySelector('.fm #b2').addEventListener('click', solvePart2)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
