@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 11: Monkey in the Middle</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:6em; height:12em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-grow:1; user-select:none;}
+#gfx canvas {flex:1 0 auto; height:auto; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm > * {margin-left: 1em; margin-top: 2em;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2022/day/11">aoc:day/11</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input"
+>Monkey 0:
+  Starting items: 79, 98
+  Operation: new = old * 19
+  Test: divisible by 23
+    If true: throw to monkey 2
+    If false: throw to monkey 3
+
+Monkey 1:
+  Starting items: 54, 65, 75, 74
+  Operation: new = old + 6
+  Test: divisible by 19
+    If true: throw to monkey 2
+    If false: throw to monkey 0
+
+Monkey 2:
+  Starting items: 79, 60, 97
+  Operation: new = old * old
+  Test: divisible by 13
+    If true: throw to monkey 1
+    If false: throw to monkey 3
+
+Monkey 3:
+  Starting items: 74
+  Operation: new = old + 3
+  Test: divisible by 17
+    If true: throw to monkey 0
+    If false: throw to monkey 1
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="b1">Part1</button>
+    <button type="button" id="b2">Part2</button>
+    <code id="t"></code>
+    <code id="ans"></code>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let FPS = 3
+let _State = {}
+let _Renderer = undefined
+function render(state) {
+    state.tel.textContent = 'T ' + state.round
+    state.ans.textContent = state.score
+    let w = 0
+    for (let m of state.model) {
+        w = Math.max(w, m.score.toString().length)
+    }
+    let so = ''
+    state.model.forEach((m,i) => {
+        let ns = m.score.toString()
+        ns = ' '.repeat(w - ns.length) + ns
+        let ip = ' *'[i == state.ip ? 1 : 0]
+        so += ` ${ip}${m.id} [${ns}]: ${m.items}
+`
+    })
+    state.canvas.textContent = so
+}
+function explore2(state) {
+    switch (state.stage) {
+        case 0: {
+            state.model_M = 1
+            state.model.forEach(m => state.model_M *= m.test)
+            state.round = 0
+            state.score = 0
+            state.ip = 0
+            render(state)
+            state.stage += 1
+            break
+        }
+        case 1: {
+            for (let skip = 0; skip < 100;) {
+                let m = state.model[state.ip]
+                if (m.items.length) {
+                    let x = m.items.shift()
+                    m.score += 1
+                    x = m.op(x) % state.model_M
+                    if (state.div3) {
+                        x = Math.floor(x / 3)
+                    }
+                    let ti = (x % m.test) ? m.ff : m.ft
+                    state.model[ti].items.push(x)
+                }
+                if (m.items.length === 0) {
+                    state.ip = (state.ip + 1) % state.model.length
+                    state.round += state.ip === 0
+                    skip += state.ip === 0
+                }
+                let sc = state.model.map(m => m.score).sort((a,b) => b - a)
+                state.score = sc[0] * sc[1]
+                if (state.round === state.goalRound) {
+                    state.stage += 1
+                    break
+                }
+                if (state.div3) { break }
+            }
+            render(state)
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts, explore) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        let w = 1000 / FPS
+        while (dt > w) {
+            dt -= w
+            lastFrameTimestamp = ts
+            explore(_State)
+            if (_State.done) { return }
+        }
+    }
+    if (_Renderer) {
+        _Renderer = requestAnimationFrame((ts) => ticker(ts, explore))
+    }
+}
+function resetGraphics() {
+    if (_Renderer) {
+        cancelAnimationFrame(_Renderer)
+        _Renderer = undefined
+    }
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+    let canvas = document.createElement('pre')
+    board.appendChild(canvas)
+    return {canvas}
+}
+function parseInput() {
+    let input = document.getElementById('input').value
+    function nums(s) {
+        let rx = /-?\d+/g, m = undefined, xs = new Array()
+        while ((m = rx.exec(s)) !== null) {
+            xs.push(parseInt(m[0]))
+        }
+        return xs
+    }
+    function parseop(op) {
+        let [l,s,r] = op.trim().split(/\s+/)
+        switch (l) {
+            case 'old':
+                switch (s) {
+                    case '+':
+                        switch (r) {
+                            case 'old': return ((x) => x + x)
+                            default: r = parseInt(r); return ((x) => x + r)
+                        }
+                    case '*':
+                        switch (r) {
+                            case 'old': return ((x) => x * x)
+                            default: r = parseInt(r); return ((x) => x * r)
+                        }
+                }
+        }
+        throw Error(JSON.stringify(op))
+    }
+    let model = input.trim().split('\n\n').map(bl => {
+        let ms = bl.trim().split('\n')
+        let [id] = nums(ms[0])
+        let items = nums(ms[1])
+        let [_, op] = ms[2].split(/ new =\s*/)
+        let [test] = nums(ms[3])
+        let [ft] = nums(ms[4])
+        let [ff] = nums(ms[5])
+        return {id, items, op:parseop(op), test, ft, ff, score:0}
+    })
+    return {model}
+}
+function solvePart1() {
+    document.querySelector('.fm #b2').blur()
+    let {canvas} = resetGraphics()
+    let {model} = parseInput()
+    let tel = document.querySelector('#t')
+    let ans = document.querySelector('#ans')
+    _State = {
+        stage: 0,
+        canvas,
+        model,
+        goalRound: 20,
+        div3: true,
+        tel, ans,
+    }
+    lastFrameTimestamp = 0
+    _Renderer = requestAnimationFrame((ts) => ticker(ts, explore2))
+}
+function solvePart2() {
+    document.querySelector('.fm #b2').blur()
+    let {canvas} = resetGraphics()
+    let {model} = parseInput()
+    let tel = document.querySelector('#t')
+    let ans = document.querySelector('#ans')
+    _State = {
+        stage: 0,
+        canvas,
+        model,
+        goalRound: 10000,
+        tel, ans,
+    }
+    lastFrameTimestamp = 0
+    _Renderer = requestAnimationFrame((ts) => ticker(ts, explore2))
+}
+function setupApp() {
+    document.querySelector('.fm #b1').addEventListener('click', solvePart1)
+    document.querySelector('.fm #b2').addEventListener('click', solvePart2)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
