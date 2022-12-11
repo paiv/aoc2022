@@ -249,9 +249,9 @@ function explore2(state) {
                         }
                     }
                     state.ct += 1
-                    state.cx = state.ct % 40
+                    state.cx = state.ct % w
                     state.cy += state.cx == 0
-                    if ((state.ct + 20) % 40 === 0) {
+                    if ((state.ct + 20) % w === 0) {
                         state.score1 += state.ct * state.sx
                     }
                 }
@@ -331,7 +331,16 @@ function resetGraphics(w, h) {
 function parseInput() {
     let input = document.getElementById('input').value
     let program = input.trim().split('\n').map(s => s.trim().split(/\s+/).map((x,i) => i ? parseInt(x) : x))
-    return {program, w:40, h:6}
+    let w=40, h=6
+    for (let done = false; !done && program.length; ) {
+        let [op,n] = program[0]
+        switch (op) {
+            case 'setw': w = n; program.shift(); break
+            case 'seth': h = n; program.shift(); break
+            default: done = true
+        }
+    }
+    return {program, w, h}
 }
 function solvePart2() {
     document.querySelector('.fm #b2').blur()
