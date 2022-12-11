@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 9: Rope Bridge</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:8em; height:12em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-grow:1; user-select:none;}
+#gfx canvas {flex:1 0 auto; height:auto; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm > * {margin-left: 1em; margin-top: 2em;}
+.tm {font-family:monospace;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2022/day/9">aoc:day/9</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input"
+>R 5
+U 8
+L 8
+D 3
+R 17
+D 10
+L 25
+U 20
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="b2">Play</button>
+    <code id="t1"></code>
+    <code id="t2"></code>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let FPS = 60
+const cc = (y,x) => y * 10000 + x
+const yx = cc => [Math.floor(cc / 10000), cc % 10000]
+const neib = [cc(0,1), cc(-1,0), cc(0,-1), cc(1,0)]
+let _State = {}
+let _Renderer = undefined
+function render(state) {
+    state.te1.textContent = state.score1
+    state.te2.textContent = state.score2
+    const [bw,bh] = state.boardsize
+    let minx=0, maxx=bw-1, miny=0, maxy=bh-1
+    if (state.dirty) {
+        minx = state.dirty.minx
+        maxx = state.dirty.maxx
+        miny = state.dirty.miny
+        maxy = state.dirty.maxy
+    }
+    let w = maxx - minx + 1
+    let h = maxy - miny + 1
+    let img = new ImageData(w, h)
+    let px = img.data
+    for (let y = 0; y < h; ++y) {
+        for (let x = 0; x < w; ++x) {
+            let i = (y * w + x) * 4
+            let p = cc(miny+y, minx+x)
+            let n = state.grid.get(p)
+            let c = (n === undefined) ? 0 : Math.min(10, n) * 20
+            px[i+0] = px[i+1] = px[i+2] = c
+            px[i+3] = 255
+        }
+    }
+    state.ctx.putImageData(img, minx, miny)
+}
+function explore2(state) {
+    switch (state.stage) {
+        case 0: {
+            const [w,h] = state.boardsize
+            state.seen1 = new Set()
+            state.seen2 = new Set()
+            state.score = 0
+            state.grid = new Map()
+            state.grid.set(state.spawn, 10)
+            state.snake = [... new Array(10)].map(x => state.spawn)
+            render(state)
+            state.ip = 0
+            state.subt = 0
+            state.stage += 1
+            break
+        }
+        case 1: {
+            const [w,h] = state.boardsize
+            const ig = state.inputGrid
+            const [op, n] = state.program[state.ip]
+            if (!state.subt) { state.subt = n }
+            {
+                const snake = state.snake
+                let dx=0, dy=0
+                switch (op) {
+                    case 'R': dx += 1; break
+                    case 'L': dx -= 1; break
+                    case 'D': dy += 1; break
+                    case 'U': dy -= 1; break
+                }
+                {
+                    let [y,x] = yx(snake[0])
+                    let minx=x,maxx=x,miny=y,maxy=y
+                    x += dx
+                    y += dy
+                    snake[0] = cc(y,x)
+                    minx = Math.min(minx, x)
+                    maxx = Math.max(maxx, x)
+                    miny = Math.min(miny, y)
+                    maxy = Math.max(maxy, y)
+                    for (let i = 1; i < snake.length; ++i) {
+                        let [py,px] = yx(snake[i])
+                        let [qy,qx] = yx(snake[i-1])
+                        minx = Math.min(minx, px)
+                        maxx = Math.max(maxx, px)
+                        miny = Math.min(miny, py)
+                        maxy = Math.max(maxy, py)
+                        if (Math.abs(qx-px) > 1 || Math.abs(qy-py) > 1) {
+                            px += Math.sign(qx-px)
+                            py += Math.sign(qy-py)
+                            snake[i] = cc(py, px)
+                            minx = Math.min(minx, px)
+                            maxx = Math.max(maxx, px)
+                            miny = Math.min(miny, py)
+                            maxy = Math.max(maxy, py)
+                        }
+                    }
+                    state.dirty = {minx, maxx, miny, maxy}
+                }
+                state.seen1.add(snake[1])
+                state.seen2.add(snake[9])
+            }
+            state.subt -= 1
+            if (!state.subt) {
+                state.ip += 1
+            }
+            state.score1 = state.seen1.size
+            state.score2 = state.seen2.size
+            state.grid = new Map()
+            state.seen1.forEach(p => state.grid.set(p, 3))
+            state.seen2.forEach(p => state.grid.set(p, 5))
+            state.snake.forEach((p, i) => {
+                state.grid.set(p, i ? 8 : 10)
+            })
+            render(state)
+            if (state.ip >= state.program.length) {
+                state.stage += 1
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts, explore) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        let w = 1000 / FPS
+        while (dt > w) {
+            dt -= w
+            lastFrameTimestamp = ts
+            explore(_State)
+            if (_State.done) { return }
+        }
+    }
+    if (_Renderer) {
+        _Renderer = requestAnimationFrame((ts) => ticker(ts, explore))
+    }
+}
+function resetGraphics(w, h) {
+    if (_Renderer) {
+        cancelAnimationFrame(_Renderer)
+        _Renderer = undefined
+    }
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+
+    if (w && h) {
+        let canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        let ctx = canvas.getContext('2d')
+        ctx.fillRect(0, 0, w, h)
+        board.appendChild(canvas)
+        return {canvas}
+    }
+}
+function parseInput() {
+    let input = document.getElementById('input').value
+    let program = input.trim().split('\n').map(s => s.trim().split(/\s+/).map((x,i) => i ? parseInt(x) : x))
+    function precompute(program) {
+        let px=0, py=0
+        let minx=0, maxx=0, miny=0, maxy=0
+        for ([op,n] of program) {
+            switch (op) {
+                case 'R': px += n; break
+                case 'L': px -= n; break
+                case 'D': py += n; break
+                case 'U': py -= n; break
+            }
+            minx = Math.min(minx, px)
+            maxx = Math.max(maxx, px)
+            miny = Math.min(miny, py)
+            maxy = Math.max(maxy, py)
+        }
+        const pad = 2
+        let ox = pad - minx
+        let oy = pad - miny
+        let w = maxx-minx+1 + 2*pad
+        let h = maxy-miny+1 + 2*pad
+        return {w, h, ox, oy}
+    }
+    let ks = precompute(program)
+    return {program, ...ks}
+}
+function solvePart2() {
+    document.querySelector('.fm #b2').blur()
+    resetGraphics()
+    let {program, w, h, ox, oy} = parseInput()
+    let {canvas} = resetGraphics(w, h)
+    let te1 = document.querySelector('#t1')
+    let te2 = document.querySelector('#t2')
+    let ctx = canvas.getContext('2d')
+    _State = {
+        stage: 0,
+        ctx: ctx,
+        boardsize: [w, h],
+        program,
+        spawn: cc(oy, ox),
+        te1, te2,
+    }
+    lastFrameTimestamp = 0
+    _Renderer = requestAnimationFrame((ts) => ticker(ts, explore2))
+}
+function setupApp() {
+    document.querySelector('.fm #b2').addEventListener('click', solvePart2)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
