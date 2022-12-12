@@ -52,7 +52,6 @@ textarea {margin-top:1em; width:8em; height:12em; white-space:pre; font-family:m
 let FPS = 9
 const cc = (y,x) => y * 10000 + x
 const yx = cc => [Math.floor(cc / 10000), cc % 10000]
-const neib = [cc(0,1), cc(-1,0), cc(0,-1), cc(1,0)]
 let _State = {}
 let _Renderer = undefined
 function render(state) {

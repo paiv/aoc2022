@@ -10,3 +10,5 @@ title: Advent of Code 2022
 ​<img src="day/10/crt.gif" height="80">](day/10/)
 * [Day 11: Monkey in the Middle​\
 <img src="day/11/shuffle.png" height="80">](day/11/)
+* [Day 12: Hill Climbing Algorithm​\
+<img src="day/12/climb.gif" height="80">](day/12/)

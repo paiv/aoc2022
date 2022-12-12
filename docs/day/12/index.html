@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 12: Hill Climbing Algorithm</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:8em; height:12em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-grow:1; user-select:none;}
+#gfx canvas {flex:1 0 auto; height:auto; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm > * {margin-left: 1em; margin-top: 2em;}
+.tm {font-family:monospace;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2022/day/12">aoc:day/12</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input"
+>Sabqponm
+abcryxxl
+accszExk
+acctuvwj
+abdefghi
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="b1">S-E</button>
+    <button type="button" id="b2">All</button>
+    <code id="ans"></code>
+    <code id="t2"></code>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let FPS = 10
+const cc = (y,x) => y * 10000 + x
+const yx = cc => [Math.floor(cc / 10000), cc % 10000]
+let _State = {}
+let _Renderer = undefined
+function render(state) {
+    state.ans.textContent = state.score
+    state.te2.textContent = state.score2 || ''
+    const [bw,bh] = state.boardsize
+    const pois = state.pois
+    let minx=0, maxx=bw-1, miny=0, maxy=bh-1
+    if (state.dirty) {
+        minx = state.dirty.minx
+        maxx = state.dirty.maxx
+        miny = state.dirty.miny
+        maxy = state.dirty.maxy
+    }
+    let w = maxx - minx + 1
+    let h = maxy - miny + 1
+    let img = new ImageData(w, h)
+    let px = img.data
+    for (let y = 0; y < h; ++y) {
+        for (let x = 0; x < w; ++x) {
+            let i = (y * w + x) * 4
+            let p = cc(miny+y, minx+x)
+            let c = state.grid.get(p) || 0
+            if (pois && pois.has(p)) {
+                c = c || 120
+                px[i+0] = px[i+2] = c
+                px[i+1] = Math.floor(c / 5)
+            }
+            else {
+                px[i+0] = px[i+1] = px[i+2] = c
+            }
+            px[i+3] = 255
+        }
+    }
+    state.ctx.putImageData(img, minx, miny)
+}
+function findPath(grid, start, goal) {
+    let fringe = [[0, start, [start]]]
+    let seen = new Set()
+    let lastPath = undefined
+    while (fringe.length) {
+        let [w, p, path] = fringe.shift()
+        lastPath = path
+        if (p === goal) { return [path] }
+        if (seen.has(p)) { continue }
+        seen.add(p)
+        let [y,x] = yx(p)
+        for (let [dy,dx] of [[0,1], [0,-1], [1,0], [-1,0]]) {
+            let q = cc(y+dy, x+dx)
+            let a = grid.get(p)
+            let b = grid.get(q)
+            if (b !== undefined && b - a < 2) {
+                fringe.push([w+1, q, path.concat([q])])
+            }
+        }
+    }
+    return [undefined, lastPath]
+}
+function shuffle(xs) {
+    for (let i = xs.length - 1; i > 0; --i) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [xs[i], xs[j]] = [xs[j], xs[i]];
+    }
+}
+function explore2(state) {
+    switch (state.stage) {
+        case 0: {
+            state.inputGrid = state.grid
+            state.score = 0
+            state.grid = new Map()
+            let paths = new Array()
+            state.inputGrid.forEach((n, p) => {
+                state.grid.set(p, Math.round(30 * Math.max(0, 5 + Math.log(n / 30))))
+            })
+            render(state)
+            state.stage += 1
+            break
+        }
+        case 1: {
+            if (!state.currentRun && state.fringe.length) {
+                let start = state.fringe[0]
+                let [path, last] = findPath(state.inputGrid, start, state.goal)
+                state.currentRun = path || last
+                state.subt = 0
+                state.pois = new Set([state.currentRun[0]])
+                state.dirty = undefined
+            }
+            if (state.currentRun) {
+                if (state.subt >= state.currentRun.length) {
+                    let score = state.currentRun.length - 1
+                    if (!state.score || state.score > score) {
+                        if (state.currentRun[state.currentRun.length-1] === state.goal) {
+                            state.score = score
+                            state.bestPath = state.currentRun
+                        }
+                    }
+                    state.sleepInterval = Math.floor(FPS / 4)
+                    state.stage += 1
+                }
+                else {
+                    let p = state.currentRun[state.subt]
+                    let [y,x] = yx(p)
+                    let n = state.inputGrid.get(p)
+                    state.grid.set(p, Math.round(25 * Math.max(4, 10 + Math.log(n / 30))))
+                    state.score2 = state.subt
+                    state.subt += 1
+                    state.dirty = {minx:x, maxx:x, miny:y, maxy:y}
+                }
+            }
+            render(state)
+            break
+        }
+        case 2: {
+            if (--state.sleepInterval <= 0) {
+                state.currentRun.forEach(p => {
+                    let n = state.inputGrid.get(p)
+                    state.grid.set(p, Math.round(30 * Math.max(0, 5 + Math.log(n / 30))))
+                })
+                state.currentRun = undefined
+                state.fringe.shift()
+                if (state.fringe.length) {
+                    state.pois = undefined
+                    state.stage -= 1
+                }
+                else {
+                    state.pois = new Set([state.bestPath[0]])
+                    state.bestPath.forEach(p => {
+                        let n = state.inputGrid.get(p)
+                        state.grid.set(p, Math.round(25 * Math.max(4, 10 + Math.log(n / 30))))
+                    })
+                    state.stage += 1
+                }
+                state.dirty = undefined
+                render(state)
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts, explore) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        let w = 1000 / FPS
+        while (dt > w) {
+            dt -= w
+            lastFrameTimestamp = ts
+            explore(_State)
+            if (_State.done) { return }
+        }
+    }
+    if (_Renderer) {
+        _Renderer = requestAnimationFrame((ts) => ticker(ts, explore))
+    }
+}
+function resetGraphics(w, h) {
+    if (_Renderer) {
+        cancelAnimationFrame(_Renderer)
+        _Renderer = undefined
+    }
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+
+    if (w && h) {
+        let canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        let ctx = canvas.getContext('2d')
+        ctx.fillRect(0, 0, w, h)
+        board.appendChild(canvas)
+        return {canvas}
+    }
+}
+function parseInput() {
+    let input = document.getElementById('input').value
+    let lines = input.trim().split('\n')
+    const [S,E,a,z] = 'SEaz'.split('').map(s => s.charCodeAt(0))
+    let grid = lines.reduce((d,s,y) => s.split('').reduce((d,c,x) => d.set(cc(y,x), c.charCodeAt(0) - a), d), new Map())
+    const getk = (d, where) => { for (let [k,v] of d.entries()) { if (v === where) return k }}
+    let start = getk(grid, S-a)
+    let end = getk(grid, E-a)
+    grid.set(start, a-a)
+    grid.set(end, z-a)
+    return {grid, w:lines[0].length, h:lines.length, start, end}
+}
+function solvePart1() {
+    document.querySelector('.fm #b1').blur()
+    resetGraphics()
+    FPS = 10
+    let {grid, w, h, start, end} = parseInput()
+    let {canvas} = resetGraphics(w, h)
+    let ans = document.querySelector('#ans')
+    let te2 = document.querySelector('#t2')
+    let ctx = canvas.getContext('2d')
+    let state = {
+        stage: 0,
+        ctx: ctx,
+        boardsize: [w, h],
+        grid, start, goal:end,
+        ans, te2,
+    }
+    state.fringe = [start]
+    _State = state
+    lastFrameTimestamp = 0
+    _Renderer = requestAnimationFrame((ts) => ticker(ts, explore2))
+}
+function solvePart2() {
+    document.querySelector('.fm #b2').blur()
+    resetGraphics()
+    FPS = 60
+    let {grid, w, h, start, end} = parseInput()
+    let {canvas} = resetGraphics(w, h)
+    let ans = document.querySelector('#ans')
+    let te2 = document.querySelector('#t2')
+    let ctx = canvas.getContext('2d')
+    let state = {
+        stage: 0,
+        ctx: ctx,
+        boardsize: [w, h],
+        grid, start, goal:end,
+        ans, te2,
+    }
+    state.fringe = new Array()
+    state.grid.forEach((n,p) => {
+        if (n === 0) { state.fringe.push(p) }
+    })
+    shuffle(state.fringe)
+    _State = state
+    lastFrameTimestamp = 0
+    _Renderer = requestAnimationFrame((ts) => ticker(ts, explore2))
+}
+function setupApp() {
+    document.querySelector('.fm #b1').addEventListener('click', solvePart1)
+    document.querySelector('.fm #b2').addEventListener('click', solvePart2)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
