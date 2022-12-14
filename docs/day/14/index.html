@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 14: Regolith Reservoir</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:8em; height:12em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-grow:1; user-select:none;}
+#gfx canvas {flex:1 0 auto; height:auto; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm > * {margin-left: 1em; margin-top: 2em;}
+.tm {font-family:monospace;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2022/day/14">aoc:day/14</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input"
+>498,4 -> 498,6 -> 496,6
+503,4 -> 502,4 -> 502,9 -> 494,9
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="b1">Part 1</button>
+    <button type="button" id="b2">Part 2</button>
+    <code id="ans"></code>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let FPS = 60
+let Palette = {bg:[0,0,0], rock:[26,52,78], grain:[192,141,10], fall:[255,226,153]}
+const cc = (y,x) => y * 10000 + x
+const yx = cc => [Math.floor(cc / 10000), cc % 10000]
+let _State = {}
+let _Renderer = undefined
+function render(state) {
+    state.ans.textContent = state.score
+    const [bw,bh] = state.boardsize
+    const pois = state.pois
+    let minx=0, maxx=bw-1, miny=0, maxy=bh-1
+    if (state.dirty) {
+        minx = state.dirty.minx
+        maxx = state.dirty.maxx
+        miny = state.dirty.miny
+        maxy = state.dirty.maxy
+    }
+    let w = maxx - minx + 1
+    let h = maxy - miny + 1
+    let img = new ImageData(w, h)
+    let px = img.data
+    const bg = Palette.bg
+    const rock = Palette.rock
+    const grain = Palette.grain
+    const fall = Palette.fall
+    for (let y = 0; y < h; ++y) {
+        for (let x = 0; x < w; ++x) {
+            let i = (y * w + x) * 4
+            let p = cc(miny+y, minx+x)
+            let q = state.grid.get(p) || 0
+            let s = bg
+            switch (q) {
+                case 1: s = rock; break
+                case 2: s = grain; break
+                case 3: s = fall; break
+            }
+            px[i+0] = s[0]
+            px[i+1] = s[1]
+            px[i+2] = s[2]
+            px[i+3] = 255
+        }
+    }
+    state.ctx.putImageData(img, minx, miny)
+}
+function explore1(state) {
+    switch (state.stage) {
+        case 0: {
+            state.inputGrid = state.grid
+            state.score = 0
+            state.grid = new Map()
+            let paths = new Array()
+            state.inputGrid.forEach((n, p) => {
+                state.grid.set(p, n)
+            })
+            state.grains = new Array()
+            state.timer = 0
+            render(state)
+            state.stage += 1
+            break
+        }
+        case 1: {
+            state.grains.forEach(grain => {
+                state.grid.delete(grain)
+            })
+            const [w, h] = state.boardsize
+            let dawn = new Array()
+            state.grains.forEach(grain => {
+                let [y, x] = yx(grain)
+                if (y+2 < h) {
+                    if (!state.grid.has(cc(y+1,x))) {
+                        y += 1
+                        dawn.push(cc(y,x))
+                    }
+                    else if (!state.grid.has(cc(y+1,x-1))) {
+                        x -= 1
+                        y += 1
+                        dawn.push(cc(y,x))
+                    }
+                    else if (!state.grid.has(cc(y+1,x+1))) {
+                        x += 1
+                        y += 1
+                        dawn.push(cc(y,x))
+                    }
+                    else {
+                        state.grid.set(grain, 2)
+                        state.score += 1
+                    }
+                }
+                else {
+                    state.is_terminal = 1
+                }
+            })
+            state.grains = dawn
+            if (state.timer) {
+                state.timer -= 1
+            }
+            if (!state.timer && !state.is_terminal) {
+                state.grains.push(state.start)
+                state.timer = Math.max(1, Math.min(10, Math.floor(FPS / 2)))
+            }
+            state.grains.forEach(p => { state.grid.set(p, 3) })
+            if (state.is_terminal && state.grains.length === 0) {
+                state.stage += 1
+            }
+            render(state)
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+function explore2(state) {
+    switch (state.stage) {
+        case 0: {
+            state.inputGrid = state.grid
+            state.score = 0
+            state.grid = new Map()
+            let paths = new Array()
+            state.inputGrid.forEach((n, p) => {
+                state.grid.set(p, n)
+            })
+            state.grains = new Array()
+            state.timer = 0
+            state.stage += 1
+            break
+        }
+        case 1: {
+            state.grains.forEach(grain => {
+                state.grid.delete(grain)
+            })
+            const [w, h] = state.boardsize
+            let dawn = new Array()
+            state.grains.forEach(grain => {
+                let [y, x] = yx(grain)
+                if (y+1 < h) {
+                    if (!state.grid.has(cc(y+1,x))) {
+                        y += 1
+                        dawn.push(cc(y,x))
+                    }
+                    else if (!state.grid.has(cc(y+1,x-1))) {
+                        x -= 1
+                        y += 1
+                        dawn.push(cc(y,x))
+                    }
+                    else if (!state.grid.has(cc(y+1,x+1))) {
+                        x += 1
+                        y += 1
+                        dawn.push(cc(y,x))
+                    }
+                    else {
+                        state.grid.set(grain, 2)
+                        state.score += 1
+                        if (grain == state.start) {
+                            state.is_terminal = 1
+                        }
+                    }
+                }
+                else {
+                    state.grid.set(grain, 2)
+                    state.score += 1
+                }
+            })
+            state.grains = dawn
+            if (state.timer) {
+                state.timer -= 1
+            }
+            if (!state.timer && !state.is_terminal) {
+                state.grains.push(state.start)
+                state.timer = Math.max(1, Math.min(10, Math.floor(FPS / 2)))
+            }
+            state.grains.forEach(p => { state.grid.set(p, 3) })
+            if (state.is_terminal && state.grains.length === 0) {
+                state.stage += 1
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts, explore) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        let w = 1000 / FPS
+        while (dt > w && !_State.done) {
+            dt -= w
+            lastFrameTimestamp = ts - dt
+            explore(_State)
+        }
+        render(_State)
+    }
+    if (_Renderer && !_State.done) {
+        _Renderer = requestAnimationFrame((ts) => ticker(ts, explore))
+    }
+}
+function resetGraphics(w, h) {
+    if (_Renderer) {
+        cancelAnimationFrame(_Renderer)
+        _Renderer = undefined
+    }
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+
+    if (w && h) {
+        let canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        let ctx = canvas.getContext('2d')
+        ctx.fillRect(0, 0, w, h)
+        board.appendChild(canvas)
+        return {canvas}
+    }
+}
+function parseInput() {
+    let input = document.getElementById('input').value
+    let lines = input.trim().split('\n')
+    function ints(s) {
+        const rx = /-?\d+/g
+        let res = new Array(), m
+        while ((m = rx.exec(s)) !== null) {
+            res.push(parseInt(m[0]))
+        }
+        return res
+    }
+    let grid = new Map()
+    let minx=500,maxx=500,miny=0,maxy=0
+    lines.forEach(line => {
+        let a = ints(line)
+        for (let k = 0; k < a.length-3; k += 2) {
+            const ax=a[k],ay=a[k+1],bx=a[k+2],by=a[k+3]
+            const dx=Math.sign(bx-ax), dy=Math.sign(by-ay)
+            const nx=Math.abs(bx-ax)+1, ny=Math.abs(by-ay)+1
+            for (let j = 0, y = ay; j < ny; ++j, y += dy) {
+                for (let i = 0, x = ax; i < nx; ++i, x += dx) {
+                    grid.set(cc(y,x), 1)
+                    minx = Math.min(minx, x)
+                    maxx = Math.max(maxx, x)
+                    miny = Math.min(miny, y)
+                    maxy = Math.max(maxy, y)
+                }
+            }
+        }
+    })
+    minx -= 1
+    w = maxx - minx + 2
+    h = maxy - miny + 2
+    grid = new Map([...grid.entries()].map(ps => { let [y,x] = yx(ps[0]); return [cc(y-miny, x-minx), ps[1]] }))
+    return {grid, w, h, start:cc(0-miny, 500-minx)}
+}
+function solvePart1() {
+    document.querySelector('.fm #b1').blur()
+    resetGraphics()
+    let {grid, w, h, start} = parseInput()
+    let {canvas} = resetGraphics(w, h)
+    let ans = document.querySelector('#ans')
+    let ctx = canvas.getContext('2d')
+    let state = {
+        stage: 0,
+        ctx: ctx,
+        boardsize: [w, h],
+        grid, start,
+        ans,
+    }
+    _State = state
+    lastFrameTimestamp = 0
+    _Renderer = requestAnimationFrame((ts) => ticker(ts, explore1))
+}
+function solvePart2() {
+    document.querySelector('.fm #b2').blur()
+    resetGraphics()
+    let {grid, w, h, start} = parseInput()
+    let dx = Math.max(0, Math.floor(h - w/2))
+    w += 2 * dx + 2
+    let minx = yx(start)[1] - Math.floor(w/2)
+    start = cc(yx(start)[0], yx(start)[1]-minx)
+    grid = new Map([...grid.entries()].map(ps => { let [y,x] = yx(ps[0]); return [cc(y, x-minx), ps[1]] }))
+    let {canvas} = resetGraphics(w, h)
+    let ans = document.querySelector('#ans')
+    let ctx = canvas.getContext('2d')
+    let state = {
+        stage: 0,
+        ctx: ctx,
+        boardsize: [w, h],
+        grid, start,
+        ans,
+    }
+    _State = state
+    lastFrameTimestamp = 0
+    _Renderer = requestAnimationFrame((ts) => ticker(ts, explore2))
+}
+function setupApp() {
+    document.querySelector('.fm #b1').addEventListener('click', solvePart1)
+    document.querySelector('.fm #b2').addEventListener('click', solvePart2)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>

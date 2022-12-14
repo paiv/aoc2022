@@ -12,3 +12,5 @@ title: Advent of Code 2022
 <img src="day/11/shuffle.png" height="80">](day/11/)
 * [Day 12: Hill Climbing Algorithm​\
 <img src="day/12/climb.gif" height="80">](day/12/)
+* [Day 14: Regolith Reservoir\
+<img src="day/14/sand.gif" height="80">](day/14/)

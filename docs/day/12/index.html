@@ -111,10 +111,12 @@ function findPath(grid, start, goal) {
     }
     return [undefined, lastPath]
 }
-function shuffle(xs) {
-    for (let i = xs.length - 1; i > 0; --i) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [xs[i], xs[j]] = [xs[j], xs[i]];
+function shuffle(a) {
+    for (let i = a.length - 1; i > 0; --i) {
+        const j = Math.floor(Math.random() * (i + 1))
+        const x = a[i]
+        a[i] = a[j]
+        a[j] = x
     }
 }
 function explore2(state) {
@@ -172,6 +174,7 @@ function explore2(state) {
                     state.grid.set(p, Math.round(30 * Math.max(0, 5 + Math.log(n / 30))))
                 })
                 state.currentRun = undefined
+                state.score2 = undefined
                 state.fringe.shift()
                 if (state.fringe.length) {
                     state.pois = undefined
@@ -205,7 +208,7 @@ function ticker(ts, explore) {
         let w = 1000 / FPS
         while (dt > w) {
             dt -= w
-            lastFrameTimestamp = ts
+            lastFrameTimestamp = ts - dt
             explore(_State)
             if (_State.done) { return }
         }
