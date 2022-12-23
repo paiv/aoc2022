@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 23: Unstable Diffusion</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:8em; height:12em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-grow:1; user-select:none;}
+#gfx canvas {flex:1 0 auto; height:auto; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm > * {margin-left: 1em; margin-top: 2em;}
+.tm {font-family:monospace;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2022/day/23">aoc:day/23</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input"
+>....#..
+..###.#
+#...#.#
+.#...##
+#.###..
+##.#.##
+.#..#..
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="b1">Play</button>
+    <code id="t"></code>
+    <code id="ans"></code>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let FPS = 2
+let Palette = {bg:[0,0,0], rock:[192,141,10]}
+const cc = (y,x) => y * 10000 + x
+const yx = cc => [Math.floor(cc / 10000), cc % 10000]
+let _State = {}
+let _Renderer = undefined
+function render(state) {
+    state.ans.textContent = state.score
+    state.tel.textContent = 'T ' + (state.round|0)
+    const [bw,bh] = state.boardsize
+    const pois = state.pois
+    let minx=0, maxx=bw-1, miny=0, maxy=bh-1
+    if (state.dirty) {
+        minx = state.dirty.minx
+        maxx = state.dirty.maxx
+        miny = state.dirty.miny
+        maxy = state.dirty.maxy
+    }
+    let w = maxx - minx + 1
+    let h = maxy - miny + 1
+    let img = new ImageData(w, h)
+    let px = img.data
+    const bg = Palette.bg
+    const rock = Palette.rock
+    for (let y = 0; y < h; ++y) {
+        for (let x = 0; x < w; ++x) {
+            let i = (y * w + x) * 4
+            let p = cc(miny+y, minx+x)
+            let s = state.grid.has(p) ? rock : bg
+            px[i+0] = s[0]
+            px[i+1] = s[1]
+            px[i+2] = s[2]
+            px[i+3] = 255
+        }
+    }
+    state.ctx.putImageData(img, minx, miny)
+}
+function score1(grid) {
+    let minx=Infinity, maxx=-Infinity, miny=Infinity, maxy=-Infinity
+    grid.forEach(p => {
+        let [y,x] = yx(p)
+        minx = Math.min(minx, x)
+        maxx = Math.max(maxx, x)
+        miny = Math.min(miny, y)
+        maxy = Math.max(maxy, y)
+    })
+    let ans = 0
+    for (let y = miny; y <= maxy; ++y) {
+        for (let x = minx; x <= maxx; ++x) {
+            let p = cc(y,x)
+            ans += !grid.has(p)
+        }
+    }
+    return ans
+}
+function explore1(state) {
+    switch (state.stage) {
+        case 0: {
+            state.score = score1(state.grid)
+            state.round = 0
+            state.neib = [cc(0,1), cc(-1,1), cc(-1,0), cc(-1,-1), cc(0,-1), cc(1,-1), cc(1,0), cc(1,1)]
+            let props = [[cc(-1,-1), cc(-1,0), cc(-1,1)], [cc(1,-1), cc(1,0), cc(1,1)], [cc(-1,-1), cc(0,-1), cc(1,-1)], [cc(-1,1), cc(0,1), cc(1,1)]]
+            state.props = props.concat(props)
+            render(state)
+            state.stage += 1
+            break
+        }
+        case 1: {
+            {
+                const {grid, neib, props, round} = state
+                let claims = new Map()
+                let dawn = new Map()
+                let mi = round % 4
+                grid.forEach(p => {
+                    dawn.set(p, p)
+                    if (neib.some(s => grid.has(p+s))) {
+                        for (let i = mi; i < mi+4; ++i) {
+                            if (props[i].every(s => !grid.has(p+s))) {
+                                let s = p + props[i][1]
+                                claims.set(s, (claims.get(s)|0) + 1)
+                                dawn.set(p, s)
+                                break
+                            }
+                        }
+                    }
+                })
+                let day = new Set()
+                let minx=Infinity, maxx=-Infinity, miny=Infinity, maxy=-Infinity
+                dawn.forEach((s, p) => {
+                    day.add(claims.get(s) === 1 ? s : p)
+                    let [y,x] = yx(p)
+                    let [v,u] = yx(s)
+                    minx = Math.min(minx, Math.min(x,u))
+                    maxx = Math.max(maxx, Math.max(x,u))
+                    miny = Math.min(miny, Math.min(y,v))
+                    maxy = Math.max(maxy, Math.max(y,v))
+                })
+                let same = true
+                for (let p of grid) {
+                    if (!day.has(p)) {
+                        same = false
+                        break
+                    }
+                }
+                state.grid = day
+                state.dirty = {minx,maxx,miny,maxy}
+                if (same) {
+                    state.stage += 1
+                }
+            }
+            if (state.round < 10) {
+                state.score = score1(state.grid)
+            }
+            state.round += 1
+            render(state)
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts, explore) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        let w = 1000 / FPS
+        while (dt > w && !_State.done) {
+            dt -= w
+            lastFrameTimestamp = ts - dt
+            explore(_State)
+        }
+        render(_State)
+    }
+    if (_Renderer && !_State.done) {
+        _Renderer = requestAnimationFrame((ts) => ticker(ts, explore))
+    }
+}
+function resetGraphics(w, h) {
+    if (_Renderer) {
+        cancelAnimationFrame(_Renderer)
+        _Renderer = undefined
+    }
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+
+    if (w && h) {
+        let canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        let ctx = canvas.getContext('2d')
+        ctx.fillRect(0, 0, w, h)
+        board.appendChild(canvas)
+        return {canvas}
+    }
+}
+function parseInput() {
+    let input = document.getElementById('input').value
+    let lines = input.trim().split('\n')
+    let w = lines[0].length
+    let h = lines.length
+    // let pad = Math.floor(w / 2)
+    let pad = w
+    let grid = lines.reduce((a,s,y) =>
+        s.split('').reduce((a,c,x) => c === '#' ? a.add(cc(y+pad,x+pad)) : a, a), new Set())
+    return {grid, w:w+2*pad, h:h+2*pad}
+}
+function solvePart1() {
+    document.querySelector('.fm #b1').blur()
+    resetGraphics()
+    let {grid, w, h} = parseInput()
+    let {canvas} = resetGraphics(w, h)
+    let ans = document.querySelector('#ans')
+    let tel = document.querySelector('#t')
+    let ctx = canvas.getContext('2d')
+    let state = {
+        stage: 0,
+        ctx: ctx,
+        boardsize: [w, h],
+        grid,
+        ans, tel,
+    }
+    _State = state
+    lastFrameTimestamp = 0
+    _Renderer = requestAnimationFrame((ts) => ticker(ts, explore1))
+}
+function setupApp() {
+    document.querySelector('.fm #b1').addEventListener('click', solvePart1)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
