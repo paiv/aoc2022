@@ -8,3 +8,5 @@ Advent of Code 2022 — paiv
 [![](docs/day/9/snake.gif)](https://paiv.github.io/aoc2022/day/9/)
 [![](docs/day/10/crt.gif)](https://paiv.github.io/aoc2022/day/10/)
 [![](docs/day/12/climb.gif)](https://paiv.github.io/aoc2022/day/12/)
+[![](docs/day/14/sand.gif)](https://paiv.github.io/aoc2022/day/14/)
+[![](docs/day/24/winds.gif)](https://paiv.github.io/aoc2022/day/24/)

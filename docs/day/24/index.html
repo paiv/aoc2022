@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 24: Blizzard Basin</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:8em; height:12em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-grow:1; user-select:none;}
+#gfx canvas {flex:1 0 auto; height:auto; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm > * {margin-left: 1em; margin-top: 2em;}
+.tm {font-family:monospace;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2022/day/24">aoc:day/24</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input"
+>#.######
+#>>.<^<#
+#.<..<<#
+#>v.><>#
+#<^v^^>#
+######.#
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="b1">Play</button>
+    <code id="t"></code>
+    <code id="ans"></code>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let FPS = 2
+let Palette = {'.':[0,0,0], '#':[31,57,75], '@':[231,215,185], '>':[35,81,217], '<':[141,35,217], '^':[217,35,141], 'v':[217,111,35]}
+const cc = (y,x) => y * 10000 + x
+const yx = cc => [Math.round(cc / 10000), cc % 10000]
+let _State = {}
+let _Renderer = undefined
+function render(state) {
+    const {grid, boardsize, score, round} = state
+    state.ans.textContent = score ? score : ''
+    state.tel.textContent = 'T ' + Math.max(0,round-1)
+    const [bw,bh] = boardsize
+    const pois = state.pois
+    let minx=0, maxx=bw-1, miny=0, maxy=bh-1
+    if (state.dirty) {
+        minx = state.dirty.minx
+        maxx = state.dirty.maxx
+        miny = state.dirty.miny
+        maxy = state.dirty.maxy
+    }
+    let w = maxx - minx + 1
+    let h = maxy - miny + 1
+    let img = new ImageData(w, h)
+    let px = img.data
+    for (let y = 0; y < h; ++y) {
+        for (let x = 0; x < w; ++x) {
+            let i = (y * w + x) * 4
+            let p = cc(miny+y, minx+x)
+            let c = grid.get(p) || '.'
+            let s = Palette[c]
+            px[i+0] = Math.floor(0.25 * px[i+0] + 0.75 * s[0])
+            px[i+1] = Math.floor(0.25 * px[i+1] + 0.75 * s[1])
+            px[i+2] = Math.floor(0.25 * px[i+2] + 0.75 * s[2])
+            px[i+3] = 255
+        }
+    }
+    state.ctx.putImageData(img, minx, miny)
+}
+function solve(T0, state, start, goal) {
+    const {board, winds, neib, M} = state
+    let [w,h] = state.boardsize
+    const W = w - 2
+    const H = h - 2
+    const ws = new Map([['>', [0,1]], ['<', [0,-1]], ['^', [-1,0]], ['v', [1,0]]])
+    let _forecast = new Map()
+    function forecast(t) {
+        let ps = _forecast.get(t)
+        if (!ps) {
+            ps = new Map()
+            winds.forEach((c,p) => {
+                let [y,x] = yx(p)
+                let [dy,dx] = ws.get(c)
+                y = ((y - 1 + dy * t) % H + H) % H + 1
+                x = ((x - 1 + dx * t) % W + W) % W + 1
+                ps.set(cc(y, x), c)
+            })
+            _forecast.set(t, ps)
+        }
+        return ps
+    }
+    function clearsky(t, pos) {
+        let ps = forecast(t)
+        return !ps.has(pos)
+    }
+    function valid(t, pos) {
+        return board.has(pos) && clearsky(t % M, pos)
+    }
+    let fringe = [[T0, start, []]]
+    let seen = new Set()
+    while (fringe.length) {
+        let [t, p, path] = fringe.shift()
+        if (p === goal) {
+            return [path, forecast]
+        }
+        let k = `${t}:${p}`
+        if (seen.has(k)) { continue }
+        seen.add(k)
+        let [py,px] = yx(p)
+        for (let [dy,dx] of neib) {
+            let q = cc(py+dy, px+dx)
+            if (valid(t+1, q)) {
+                fringe.push([t+1, q, path.concat([q])])
+            }
+        }
+        if (valid(t+1, p)) {
+            fringe.push([t+1, p, path.concat([p])])
+        }
+    }
+}
+function explore1(state) {
+    switch (state.stage) {
+        case 0: {
+            state.inputGrid = new Map([...state.grid])
+            state.score = 0
+            state.round = 0
+            let [w,h] = state.boardsize
+            w -= 2
+            h -= 2
+            for (let i = Math.max(w,h); i <= w*h; ++i) {
+                if ((i % w === 0) && (i % h === 0)) {
+                    state.M = i; break
+                }
+            }
+            state.neib = [[0,1], [0,-1], [-1,0], [1,0]]
+            let board = new Set()
+            let winds = new Map()
+            state.inputGrid.forEach((c,p) => {
+                if (c !== '#') {
+                    board.add(p)
+                    if ('<>^v'.indexOf(c) >= 0) {
+                        winds.set(p, c)
+                    }
+                }
+            })
+            state.board = board
+            state.winds = winds
+            let [path1, forecast] = solve(0, state, state.start, state.goal)
+            let [path2, f2] = solve(path1.length, state, state.goal, state.start)
+            let [path3, f3] = solve(path1.length+path2.length, state, state.start, state.goal)
+            state.path = [state.start].concat(path1).concat(path2).concat(path3)
+            state.path1 = path1
+            state.forecast = forecast
+            state.stage += 1
+            state.ready = true
+            break
+        }
+        case 1: {
+            let pos = state.path[state.round]
+            let winds = state.forecast(state.round)
+            state.board.forEach(p => state.grid.set(p, winds.get(p) || '.'))
+            if (state.grid.get(pos) !== '.') {
+                console.error(state.round, yx(pos), 'got wind', state.grid.get(pos));
+                state.stage += 100
+            }
+            state.grid.set(pos, '@')
+            state.round += 1
+            if (state.round === state.path1.length) {
+                state.score = state.round
+            }
+            if (state.round >= state.path.length) {
+                state.stage += 1
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts, explore) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        let w = 1000 / FPS
+        while (dt > w && !_State.done) {
+            dt -= w
+            lastFrameTimestamp = ts - dt
+            explore(_State)
+        }
+        if (_State.ready) {
+            render(_State)
+        }
+    }
+    if (_Renderer && !_State.done) {
+        _Renderer = requestAnimationFrame((ts) => ticker(ts, explore))
+    }
+}
+function resetGraphics(w, h) {
+    if (_Renderer) {
+        cancelAnimationFrame(_Renderer)
+        _Renderer = undefined
+    }
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+
+    if (w && h) {
+        let canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        let ctx = canvas.getContext('2d')
+        ctx.fillRect(0, 0, w, h)
+        board.appendChild(canvas)
+        return {canvas}
+    }
+}
+function parseInput() {
+    let input = document.getElementById('input').value
+    let lines = input.trim().split('\n')
+    let w = lines[0].length
+    let h = lines.length
+    let start = cc(0, lines[0].indexOf('.'))
+    let goal = cc(h-1, lines[h-1].indexOf('.'))
+    let grid = lines.reduce((a,s,y) =>
+        s.split('').reduce((a,c,x) => a.set(cc(y,x),c), a), new Map())
+    return {grid, w, h, start, goal}
+}
+function solvePart1() {
+    document.querySelector('.fm #b1').blur()
+    resetGraphics()
+    let {grid, w, h, start, goal} = parseInput()
+    let {canvas} = resetGraphics(w, h)
+    let ans = document.querySelector('#ans')
+    let tel = document.querySelector('#t')
+    let ctx = canvas.getContext('2d')
+    let state = {
+        stage: 0,
+        ctx: ctx,
+        boardsize: [w, h],
+        grid,
+        start, goal,
+        ans, tel,
+    }
+    _State = state
+    lastFrameTimestamp = 0
+    _Renderer = requestAnimationFrame((ts) => ticker(ts, explore1))
+}
+function setupApp() {
+    document.querySelector('.fm #b1').addEventListener('click', solvePart1)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>

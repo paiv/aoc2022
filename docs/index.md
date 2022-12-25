@@ -14,5 +14,5 @@ title: Advent of Code 2022
 <img src="day/12/climb.gif" height="80">](day/12/)
 * [Day 14: Regolith Reservoir\
 <img src="day/14/sand.gif" height="80">](day/14/)
-* [Day 23: Unstable Diffusion\
-<img src="day/23/diffusion.gif" height="80">](day/23/)
+* [Day 24: Blizzard Basin\
+<img src="day/24/winds.gif" height="80">](day/24/)
