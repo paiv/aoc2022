@@ -10,3 +10,4 @@ Advent of Code 2022 — paiv
 [![](docs/day/12/climb.gif)](https://paiv.github.io/aoc2022/day/12/)
 [![](docs/day/14/sand.gif)](https://paiv.github.io/aoc2022/day/14/)
 [![](docs/day/24/winds.gif)](https://paiv.github.io/aoc2022/day/24/)
+<img src="docs/day/22/cube.jpg" height="160">
